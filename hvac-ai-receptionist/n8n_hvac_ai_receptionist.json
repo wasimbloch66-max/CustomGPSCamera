@@ -1,1 +1,203 @@
-PLACEHOLDER
+{
+  "name": "HVAC - AI Receptionist Lead Intake (Starter)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "hvac-ai-receptionist-lead",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "1e9e8cd7-87d1-4c2e-9958-c2fb20ad2e01",
+      "name": "Webhook - Voice Agent Lead",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -760,
+        0
+      ],
+      "webhookId": "hvac-ai-receptionist-lead"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body ?? $json;\nconst first = (...values) => values.find(v => v !== undefined && v !== null && String(v).trim() !== '') ?? '';\nconst phoneRaw = first(body.phone, body.customer_phone, body.caller_phone, body.from);\nconst phone = String(phoneRaw).replace(/[()\\\\s.-]/g, '');\nconst urgencyRaw = String(first(body.urgency, body.priority, 'normal')).toLowerCase();\nconst urgentTerms = ['emergency','urgent','no heat','no cooling','gas smell','carbon monoxide','co alarm','sparking','smoke'];\nconst summary = String(first(body.summary, body.call_summary, body.transcript_summary, body.issue, body.reason));\nconst urgency = urgentTerms.some(term => `${urgencyRaw} ${summary.toLowerCase()}`.includes(term)) ? 'urgent' : urgencyRaw;\nconst consent = first(body.consent_to_text, body.sms_consent, false);\nreturn [{json:{event_type:'hvac_ai_receptionist_lead',call_id:first(body.call_id,body.id,''),customer_name:String(first(body.customer_name,body.name,body.caller_name,'')),phone,service_address:String(first(body.service_address,body.address,'')),city:String(first(body.city,'')),state:String(first(body.state,'')),zip_code:String(first(body.zip_code,body.zip,'')),issue_type:String(first(body.issue_type,body.issue,body.reason,'')),summary,urgency,preferred_time:String(first(body.preferred_time,body.time_preference,'')),booking_status:String(first(body.booking_status,'not_booked')),consent_to_text:consent===true||String(consent).toLowerCase()==='true'||String(consent)==='yes',received_at:new Date().toISOString(),phone_present:phone.length>=7}}];"
+      },
+      "id": "d4c23eaf-ae6e-44ee-bb82-bdb1a0a6be02",
+      "name": "Normalize & Enrich Lead",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -520,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "f9ef8b4c-a5a7-4fa3-8d11-c6e7f604c9f4",
+              "leftValue": "={{ $json.phone_present }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "962b6a1d-89ec-4022-a289-4fc0b6f7be03",
+      "name": "Valid Caller Phone?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -280,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.HVAC_LEAD_DESTINATION_URL || 'https://example.com/replace-with-your-lead-destination' }}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 10000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "7c318bcb-b95e-47f2-9f08-d27efb12be04",
+      "name": "Optional - Forward Lead to CRM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -40,
+        -140
+      ],
+      "onError": "continueRegularOutput",
+      "notesInFlow": true,
+      "notes": "Optional template. Set HVAC_LEAD_DESTINATION_URL in n8n environment or replace the example URL with your CRM/automation endpoint. Disable this node if not needed yet."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, accepted: true, message: 'Lead received', call_id: $('Normalize & Enrich Lead').item.json.call_id, phone_present: true } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "c33a1b80-74fa-4faf-9e6f-1bfc193a3e05",
+      "name": "Respond - Lead Accepted",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        220,
+        -140
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: false, accepted: false, error: 'Valid customer phone number is required' } }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "3d224ae4-64a6-4c3f-88a3-12b3e2ae4e06",
+      "name": "Respond - Missing Phone",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        -40,
+        160
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook - Voice Agent Lead": {
+      "main": [
+        [
+          {
+            "node": "Normalize & Enrich Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize & Enrich Lead": {
+      "main": [
+        [
+          {
+            "node": "Valid Caller Phone?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid Caller Phone?": {
+      "main": [
+        [
+          {
+            "node": "Optional - Forward Lead to CRM",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond - Missing Phone",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Optional - Forward Lead to CRM": {
+      "main": [
+        [
+          {
+            "node": "Respond - Lead Accepted",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "4f0f23d8-72c5-4cf8-a938-ead0fe130101",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": [
+    {
+      "name": "HVAC"
+    },
+    {
+      "name": "AI Receptionist"
+    }
+  ]
+}
