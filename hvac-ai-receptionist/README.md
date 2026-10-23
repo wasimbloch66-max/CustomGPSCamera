@@ -1,45 +1,39 @@
-# HVAC AI Receptionist + Missed-Call Text-Back (n8n)
+# HVAC AI Receptionist + Missed Call Text-Back (n8n)
 
-Professional starter kit for an HVAC service business. Includes importable n8n workflows for:
-1. Capturing AI receptionist call summaries/leads via webhook.
-2. Sending a missed-call text-back through a configurable SMS provider HTTP endpoint.
-3. Normalizing/validating inputs and returning explicit webhook responses.
+Professional starter templates for an HVAC service business.
+
+## Included workflows
+- `n8n_hvac_ai_receptionist.json`: receives a voice-agent webhook, normalizes common fields, validates the caller phone, and optionally forwards a lead to a configured CRM endpoint.
+- `n8n_hvac_missed_call_textback.json`: receives a missed-call event, checks phone, consent, opt-out and call status, then calls a configurable SMS provider endpoint.
 
 ## Important
-These are integration templates. They are not live until you configure your voice-agent webhook, SMS provider endpoint/API key, business phone number, and your data destination. Test using provider test payloads before activating. No API keys should be committed to GitHub.
+These are integration templates, not ready-to-run production systems. Workflows are inactive by default. You must configure your voice-agent webhook, CRM destination, SMS provider URL, authentication and sender number. They have not been tested against your particular provider payload.
 
-## Workflow files
-- `n8n_hvac_ai_receptionist.json`
-- `n8n_hvac_missed_call_textback.json`
+## Import and configure
+1. In n8n, choose **Import from File** and import each JSON.
+2. Open each Webhook node and use its **Test URL** first.
+3. Send a sample payload and inspect the actual incoming JSON; map fields to your chosen provider.
+4. For lead forwarding, configure `HVAC_LEAD_DESTINATION_URL` or replace the example destination. Keep the CRM-forwarding node disabled until configured.
+5. For SMS, replace the placeholder API endpoint, authentication, sender number and payload with your provider's documented format. Prefer n8n credentials over hard-coded API keys.
+6. Test with your own phone and consented test contacts. Keep workflows inactive until verified.
 
-## Configure
-1. In n8n, use **Import from File** for each JSON.
-2. Open the webhook node and copy the Test URL first.
-3. Send a sample payload to the Test URL, inspect the incoming JSON, and map provider fields if needed.
-4. For the receptionist workflow, connect your voice agent to the lead-capture webhook and configure the owner-alert endpoint/node of your choice.
-5. For missed-call texts, configure the SMS HTTP Request node with your provider's documented endpoint, authentication, and sender number. The template uses placeholder credentials and a placeholder URL.
-6. Test with your own phone and consented test contacts before production.
-
-## Suggested incoming fields
+## Example missed-call payload
 ```json
 {
-  "call_id": "demo-call-001",
-  "customer_name": "Jordan Smith",
+  "call_id": "demo-missed-001",
   "phone": "+15551234567",
-  "service_address": "123 Example St",
-  "city": "Austin",
-  "zip_code": "78701",
-  "issue_type": "AC not cooling",
-  "urgency": "same_day",
-  "preferred_time": "afternoon",
-  "booking_status": "requested",
-  "summary": "Customer says AC is running but not cooling.",
-  "consent_to_text": true
+  "customer_name": "Jordan",
+  "business_name": "Example HVAC",
+  "call_status": "missed",
+  "consent_to_text": true,
+  "opted_out": false
 }
 ```
 
-## Safety and compliance notes
-- Never claim an appointment is confirmed unless an actual scheduling system confirms it.
-- Do not ask the AI to diagnose HVAC equipment or quote final repair prices. Have it collect symptoms and route to a technician.
-- Text only contacts where you have the necessary permission. Honor opt-outs such as STOP and follow applicable TCPA/carrier rules.
-- Do not put real customer data, API tokens, phone numbers, or credentials in GitHub.
+## Production checklist
+- Use HTTPS and provider-supported webhook authentication/signature verification.
+- Add duplicate-event protection and durable CRM storage.
+- Implement opt-out handling and honor STOP. Verify customer consent and applicable TCPA, carrier and privacy requirements before texting.
+- Never claim a booking is confirmed unless the scheduling system confirms it.
+- Avoid HVAC diagnosis, safety assurances, or fixed repair quotes from AI; collect symptoms and route to a qualified technician.
+- Never commit API keys, credentials, or real customer data to GitHub.
