@@ -1,0 +1,210 @@
+{
+  "name": "HVAC - Missed Call Text-Back (Provider Template)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "hvac-missed-call",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "8a7f42ea-b3d2-49ee-9f06-4f1272bfa101",
+      "name": "Webhook - Missed Call Event",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -760,
+        0
+      ],
+      "webhookId": "hvac-missed-call"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body ?? $json;\nconst first = (...values) => values.find(v => v !== undefined && v !== null && String(v).trim() !== '') ?? '';\nconst rawPhone=first(body.phone,body.caller_phone,body.from,body.customer_phone);\nconst phone=String(rawPhone).replace(/[()\\\\s.-]/g,'');\nconst consentRaw=first(body.consent_to_text,body.sms_consent,false);\nconst consent=consentRaw===true||String(consentRaw).toLowerCase()==='true'||String(consentRaw).toLowerCase()==='yes';\nconst businessName=String(first(body.business_name,'your HVAC team'));\nconst customerName=String(first(body.customer_name,body.name,'there'));\nconst callStatus=String(first(body.call_status,body.status,'missed')).toLowerCase();\nconst optedOut=String(first(body.opted_out,false)).toLowerCase()==='true';\nreturn [{json:{event_type:'hvac_missed_call',call_id:String(first(body.call_id,body.id,'')),phone,customer_name:customerName,business_name:businessName,call_status:callStatus,consent_to_text:consent,opted_out:optedOut,should_text:phone.length>=7&&consent&&!optedOut&&['missed','no-answer','busy','failed','unanswered'].includes(callStatus),received_at:new Date().toISOString(),sms_body:`Hi ${customerName}, sorry we missed your call. This is ${businessName}. How can we help with your heating or AC service? Reply STOP to opt out.`}}];"
+      },
+      "id": "a52f9346-54c8-483d-b7fb-bf5f5c18a102",
+      "name": "Normalize & Check Text Eligibility",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -520,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c7a5d030-bf1f-4e1d-8e62-8825c0f9a103",
+              "leftValue": "={{ $json.should_text }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c5d2c992-e6b2-4edb-bb5a-67d83faea104",
+      "name": "Allowed to Send SMS?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -280,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.example-sms-provider.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer REPLACE_WITH_PROVIDER_API_KEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { to: $json.phone, from: 'REPLACE_WITH_BUSINESS_SMS_NUMBER', body: $json.sms_body } }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "0ed4a12e-df9d-4e6f-b8be-3b4ff4ba9105",
+      "name": "SMS Provider - Configure Endpoint & Auth",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -40,
+        -140
+      ],
+      "onError": "continueRegularOutput",
+      "notesInFlow": true,
+      "notes": "PLACEHOLDER ONLY. Replace endpoint, auth, sender and payload with your chosen provider's documented requirements. Use n8n credentials in production; do not leave API keys in node fields."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, accepted: true, message: 'Missed-call event processed; SMS provider node was invoked', call_id: $('Normalize & Check Text Eligibility').item.json.call_id } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "6f93a52a-8ea6-4f69-b56d-2cb3c5cb9106",
+      "name": "Respond - Text Attempted",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        220,
+        -140
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, accepted: false, message: 'No text sent: missing phone, no text consent, opted out, or call status is not eligible', call_id: $('Normalize & Check Text Eligibility').item.json.call_id } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "169fc0e4-0da2-4e51-b971-9c0cd859a107",
+      "name": "Respond - Not Eligible",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        -40,
+        160
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook - Missed Call Event": {
+      "main": [
+        [
+          {
+            "node": "Normalize & Check Text Eligibility",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize & Check Text Eligibility": {
+      "main": [
+        [
+          {
+            "node": "Allowed to Send SMS?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Allowed to Send SMS?": {
+      "main": [
+        [
+          {
+            "node": "SMS Provider - Configure Endpoint & Auth",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond - Not Eligible",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SMS Provider - Configure Endpoint & Auth": {
+      "main": [
+        [
+          {
+            "node": "Respond - Text Attempted",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "67eaa8ac-97e2-4c98-8a7c-87fd2d1a0202",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": [
+    {
+      "name": "HVAC"
+    },
+    {
+      "name": "Missed Call Text Back"
+    }
+  ]
+}
